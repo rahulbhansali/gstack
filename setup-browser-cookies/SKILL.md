@@ -49,7 +49,7 @@ If `_CONTRIB` is `true`: you are in **contributor mode**. You're a gstack user w
 
 **NOT worth filing:** user's app bugs, network errors to user's URL, auth failures on user's site, user's own JS logic bugs.
 
-**To file:** write `~/.gstack/contributor-logs/{slug}.md`:
+**To file:** write `~/.gstack/contributor-logs/{slug}.md` with **all sections below** (do not truncate — include every section through the Date/Version footer):
 
 ```
 # {Title}
@@ -64,7 +64,9 @@ Hey gstack team — ran into this while using /{skill-name}:
 1. {step}
 
 ## Raw output
-(error messages or unexpected output in a code block)
+```
+{paste the actual error or unexpected output here}
+```
 
 ## What would make this a 10
 {one sentence: what gstack should have done differently}

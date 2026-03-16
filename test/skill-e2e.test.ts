@@ -328,8 +328,8 @@ File a contributor report about this issue. Then tell me what you filed.`,
     expect(logContent).toContain('What I was trying to do');
     expect(logContent).toContain('What happened instead');
     expect(logContent).toMatch(/rating/i);
-    // "What would make this a 10" is nice-to-have — agent may truncate the report
-    // The key signal is using "My rating:" (new format) vs "How annoying" (old format)
+    expect(logContent).toContain('## Steps to reproduce');
+    expect(logContent).toContain('**Date:');
 
     // Clean up
     try { fs.rmSync(contribDir, { recursive: true, force: true }); } catch {}
@@ -428,16 +428,20 @@ describeE2E('QA skill E2E', () => {
 
   test('/qa quick completes without browse errors', async () => {
     const result = await runSkillTest({
-      prompt: `You have a browse binary at ${browseBin}. Assign it to B variable like: B="${browseBin}"
+      prompt: `B="${browseBin}"
+
+The test server is already running at: ${testServer.url}
+Target page: ${testServer.url}/basic.html
 
 Read the file qa/SKILL.md for the QA workflow instructions.
 
 Run a Quick-depth QA test on ${testServer.url}/basic.html
 Do NOT use AskUserQuestion — run Quick tier directly.
+Do NOT try to start a server or discover ports — the URL above is ready.
 Write your report to ${qaDir}/qa-reports/qa-report.md`,
       workingDirectory: qaDir,
       maxTurns: 35,
-      timeout: 180_000,
+      timeout: 240_000,
       testName: 'qa-quick',
       runId,
     });
@@ -452,7 +456,7 @@ Write your report to ${qaDir}/qa-reports/qa-report.md`,
     }
     // Accept error_max_turns — the agent doing thorough QA work is not a failure
     expect(['success', 'error_max_turns']).toContain(result.exitReason);
-  }, 240_000);
+  }, 300_000);
 });
 
 // --- B5: Review skill E2E ---
