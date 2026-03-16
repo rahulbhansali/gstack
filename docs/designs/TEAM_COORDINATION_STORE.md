@@ -1,7 +1,7 @@
 # Team Coordination Store: gstack as Engineering Intelligence Platform
 
 > Design doc for the Supabase-backed team data store and universal eval infrastructure.
-> Authored 2026-03-15. Status: approved, not yet implemented.
+> Authored 2026-03-15. Status: Phase 1 complete. Phase 2 complete (skill hooks, sync test/show, team trends). Phase 3-4 not started.
 
 ## Table of Contents
 

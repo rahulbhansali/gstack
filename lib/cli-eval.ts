@@ -541,14 +541,35 @@ async function cmdTrend(args: string[]): Promise<void> {
   let limit = 10;
   let filterTier: string | undefined;
   let filterTest: string | undefined;
+  let useTeam = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--limit' && args[i + 1]) { limit = parseInt(args[++i], 10); }
     else if (args[i] === '--tier' && args[i + 1]) { filterTier = args[++i]; }
     else if (args[i] === '--test' && args[i + 1]) { filterTest = args[++i]; }
+    else if (args[i] === '--team') { useTeam = true; }
   }
 
-  const results = loadEvalResults<EvalResult>(undefined, limit);
+  let results: EvalResult[];
+  if (useTeam) {
+    try {
+      const { isSyncConfigured } = await import('./sync-config');
+      const { pullEvalRuns } = await import('./sync');
+      if (!isSyncConfigured()) {
+        console.log('Team sync not configured — showing local data only. See docs/TEAM_SYNC_SETUP.md');
+        results = loadEvalResults<EvalResult>(undefined, limit);
+      } else {
+        const teamRows = await pullEvalRuns({ limit });
+        results = teamRows as unknown as EvalResult[];
+      }
+    } catch {
+      console.log('Team sync not available — showing local data only.');
+      results = loadEvalResults<EvalResult>(undefined, limit);
+    }
+  } else {
+    results = loadEvalResults<EvalResult>(undefined, limit);
+  }
+
   if (results.length === 0) {
     console.log('No eval runs yet. Run: EVALS=1 bun run test:evals');
     return;
@@ -627,7 +648,7 @@ Commands:
   summary [--limit N]                         Aggregate stats across all runs
   push <file>                                 Validate + save + sync an eval result
   cost <file>                                 Show per-model cost breakdown
-  trend [--limit N] [--tier X] [--test X]     Per-test pass rate trends
+  trend [--limit N] [--tier X] [--test X] [--team]  Per-test pass rate trends
   cache read|write|stats|clear|verify         Manage eval cache
   watch                                       Live E2E test dashboard
 `);
