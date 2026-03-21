@@ -185,7 +185,9 @@ Navigate to the `extension/` folder inside gstack. The exact path depends on you
 - Project install: `<your-repo>/.claude/skills/gstack/extension`
 - Dev/source: `<gstack-repo>/extension`
 
-**Tip:** In the macOS file picker, press **Cmd+Shift+G** to type a path directly. Paste the path and press Enter.
+**Tip:** The `extension/` folder may be inside a hidden directory (`.claude/`). Two ways to get there in the macOS file picker:
+- **Cmd+Shift+G** — opens a "Go to folder" text field. Paste the full path and press Enter. Fastest.
+- **Cmd+Shift+.** (period) — toggles hidden files/folders visible so you can navigate to `.claude/` normally.
 
 Select the `extension/` folder (not a file inside it) and click **Select**.
 
