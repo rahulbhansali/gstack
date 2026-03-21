@@ -358,6 +358,68 @@ GATE ("pass" or "fail"), findings (count of [P1] + [P2] markers).
 rm -f "$TMPERR"
 ```
 
+## Plan File Review Report
+
+After displaying the Review Readiness Dashboard in conversation output, also update the
+**plan file** itself so review status is visible to anyone reading the plan.
+
+### Detect the plan file
+
+1. Check if there is an active plan file in this conversation (the host provides plan file
+   paths in system messages — look for plan file references in the conversation context).
+2. If not found, skip this section silently — not every review runs in plan mode.
+
+### Generate the report
+
+Read the review log output you already have from the Review Readiness Dashboard step above.
+Parse each JSONL entry. Each skill logs different fields:
+
+- **plan-ceo-review**: \`status\`, \`unresolved\`, \`critical_gaps\`, \`mode\`, \`commit\`
+  → Findings: "{N} proposals, {M} accepted, {K} deferred" (from your Completion Summary)
+- **plan-eng-review**: \`status\`, \`unresolved\`, \`critical_gaps\`, \`mode\`, \`commit\`
+  → Findings: "{N} issues, {M} critical gaps, mode: {MODE}"
+- **plan-design-review**: \`status\`, \`overall_score\`, \`unresolved\`, \`decisions_made\`, \`commit\`
+  → Findings: "score: {N}/10 → {M}/10, {K} decisions made"
+- **codex-review**: \`status\`, \`gate\`, \`findings\`
+  → Findings: "{N} findings, {M}/{N} fixed"
+
+For the review you just completed, use details from your own Completion Summary (richer
+than the JSONL). For prior reviews, use the JSONL fields to reconstruct a summary.
+
+Produce this markdown table:
+
+\`\`\`markdown
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | \`/plan-ceo-review\` | Scope & strategy | {runs} | {status} | {findings} |
+| Codex Review | \`/codex review\` | Independent 2nd opinion | {runs} | {status} | {findings} |
+| Eng Review | \`/plan-eng-review\` | Architecture & tests (required) | {runs} | {status} | {findings} |
+| Design Review | \`/plan-design-review\` | UI/UX gaps | {runs} | {status} | {findings} |
+\`\`\`
+
+Below the table, add these lines (omit any that are empty/not applicable):
+
+- **CODEX:** (only if codex-review ran) — one-line summary of codex fixes
+- **CROSS-MODEL:** (only if both Claude and Codex reviews exist) — overlap analysis
+- **UNRESOLVED:** total unresolved decisions across all reviews
+- **VERDICT:** list reviews that are CLEAR (e.g., "CEO + ENG CLEARED — ready to implement").
+  If Eng Review is not CLEAR and not skipped globally, append "eng review required".
+
+### Write to the plan file
+
+**PLAN MODE EXCEPTION — ALWAYS RUN:** This writes to the plan file, which is the one
+file you are allowed to edit in plan mode. The plan file review report is part of the
+plan's living status.
+
+- If a \`## GSTACK REVIEW REPORT\` section already exists at the end of the plan file,
+  **replace it** entirely using the Edit tool (match from \`## GSTACK REVIEW REPORT\` to
+  the end of the file). If the Edit fails (e.g., concurrent edit changed the content),
+  re-read the plan file and retry once with the updated content.
+- If no such section exists, **append it** to the end of the plan file.
+- Always place it as the very last section in the plan file.
+
 ---
 
 ## Step 2B: Challenge (Adversarial) Mode
