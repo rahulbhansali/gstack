@@ -851,6 +851,28 @@ For each repo (sorted by commits descending):
 - Key work (inferred from commit messages)
 - AI sessions by tool
 
+**Your Contributions** (sub-section within each project):
+For each project, add a "Your contributions" block showing the current user's
+personal stats within that repo. Use the user identity from `git config user.name`
+to filter. Include:
+- Your commits / total commits (with %)
+- Your LOC (+insertions / -deletions)
+- Your key work (inferred from YOUR commit messages only)
+- Your commit type mix (feat/fix/refactor/chore/docs breakdown)
+- Your biggest ship in this repo (highest-LOC commit or PR)
+
+If the user is the only contributor, say "Solo project — all commits are yours."
+If the user has 0 commits in a repo (team project they didn't touch this period),
+say "No commits this period — [N] AI sessions only." and skip the breakdown.
+
+Format:
+```
+**Your contributions:** 47/244 commits (19%), +4.2k/-0.3k LOC
+  Key work: Writer Chat, email blocking, security hardening
+  Biggest ship: PR #605 — Writer Chat eats the admin bar (2,457 ins, 46 files)
+  Mix: feat(3) fix(2) chore(1)
+```
+
 ### Cross-Project Patterns
 - Time allocation across projects (% breakdown)
 - Peak productivity hours aggregated across all repos
