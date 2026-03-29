@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.13.7.0] - 2026-03-29 — Composable Skills
+
+Skills can now load other skills inline. Write `{{INVOKE_SKILL:office-hours}}` in a template and the generator emits the right "read file, skip preamble, follow instructions" prose automatically. Handles host-aware paths (Claude vs Codex vs Factory) and customizable skip lists.
+
+### Added
+
+- **`{{INVOKE_SKILL:skill-name}}` resolver.** Composable skill loading as a first-class resolver. Emits host-aware prose that tells Claude (or Codex, or Factory) to read another skill's SKILL.md and follow it inline, skipping preamble sections. Supports optional `skip=` parameter for additional sections to skip.
+- **Parameterized resolver support.** The placeholder regex now handles `{{NAME:arg1:arg2}}`, enabling resolvers that take arguments at generation time. Fully backward compatible with existing `{{NAME}}` patterns.
+- **`{{CHANGELOG_WORKFLOW}}` resolver.** Changelog generation logic extracted from /ship into a reusable resolver. Includes voice guidance ("lead with what the user can now do") inline.
+- **Frontmatter `name:` for skill registration.** Setup script and gen-skill-docs now read `name:` from SKILL.md frontmatter for symlink naming. Enables directory names that differ from invocation names (e.g., `run-tests/` directory registered as `/test`).
+
+### Changed
+
+- **BENEFITS_FROM now delegates to INVOKE_SKILL.** Eliminated duplicated skip-list logic. The prerequisite offer wrapper stays in BENEFITS_FROM, but the actual "read and follow" instructions come from INVOKE_SKILL.
+- **/plan-ceo-review mid-session fallback uses INVOKE_SKILL.** The "user can't articulate the problem, offer /office-hours" path now uses the composable resolver instead of inline prose.
+
 ## [0.13.6.0] - 2026-03-29 — GStack Learns
 
 Every session now makes the next one smarter. gstack remembers patterns, pitfalls, and preferences across sessions and uses them to improve every review, plan, debug, and ship. The more you use it, the better it gets on your codebase.
