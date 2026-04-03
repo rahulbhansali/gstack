@@ -599,6 +599,11 @@ document.getElementById('clear-chat').addEventListener('click', async () => {
     </div>`;
 });
 
+// ─── Reload Sidebar ─────────────────────────────────────────────
+document.getElementById('reload-sidebar').addEventListener('click', () => {
+  location.reload();
+});
+
 // ─── Debug Tabs ─────────────────────────────────────────────────
 
 const debugToggle = document.getElementById('debug-toggle');
