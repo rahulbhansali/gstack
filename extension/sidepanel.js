@@ -1392,12 +1392,31 @@ document.getElementById('conn-copy').addEventListener('click', () => {
 });
 
 // Try to connect immediately, retry every 2s until connected
+let connectAttempts = 0;
 function tryConnect() {
+  connectAttempts++;
+  const loadingEl = document.getElementById('chat-loading');
+  if (loadingEl) {
+    const detail = connectAttempts <= 1 ? 'Connecting...'
+      : `Connecting... (attempt ${connectAttempts})`;
+    const p = loadingEl.querySelector('p');
+    if (p) p.textContent = detail;
+  }
   chrome.runtime.sendMessage({ type: 'getPort' }, (resp) => {
     if (resp && resp.port && resp.connected) {
       const url = `http://127.0.0.1:${resp.port}`;
       updateConnection(url, resp.token || null);
     } else {
+      // Show debug info after 5 failed attempts
+      if (connectAttempts >= 5 && loadingEl) {
+        const p = loadingEl.querySelector('p');
+        if (p) {
+          const port = resp?.port || '?';
+          const connected = resp?.connected || false;
+          const hasToken = !!(resp?.token);
+          p.textContent = `Waiting for server... port:${port} connected:${connected} token:${hasToken} (attempt ${connectAttempts})`;
+        }
+      }
       setTimeout(tryConnect, 2000);
     }
   });

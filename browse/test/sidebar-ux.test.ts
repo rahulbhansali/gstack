@@ -1323,3 +1323,41 @@ describe('extension dispatches gstack-extension-ready event', () => {
     expect(contentSrc).toContain("new CustomEvent('gstack-extension-ready')");
   });
 });
+
+describe('sidebar auth race prevention', () => {
+  const bgSrc = fs.readFileSync(path.join(ROOT, '..', 'extension', 'background.js'), 'utf-8');
+  const spSrc = fs.readFileSync(path.join(ROOT, '..', 'extension', 'sidepanel.js'), 'utf-8');
+
+  test('getPort response includes authToken (not just port + connected)', () => {
+    // The auth race: sidepanel calls getPort, gets {port, connected} but no token.
+    // All subsequent requests fail 401. Token must be in the getPort response.
+    const getPortHandler = bgSrc.slice(
+      bgSrc.indexOf("msg.type === 'getPort'"),
+      bgSrc.indexOf("msg.type === 'setPort'"),
+    );
+    expect(getPortHandler).toContain('token: authToken');
+  });
+
+  test('tryConnect uses token from getPort response', () => {
+    // Sidepanel must pass resp.token to updateConnection, not null
+    const start = spSrc.indexOf('function tryConnect()');
+    const end = spSrc.indexOf('\ntryConnect();', start); // top-level call after the function
+    const tryConnectFn = spSrc.slice(start, end);
+    expect(tryConnectFn).toContain('resp.token');
+    expect(tryConnectFn).not.toContain('updateConnection(url, null)');
+  });
+});
+
+describe('sidebar debug visibility when stuck', () => {
+  const spSrc = fs.readFileSync(path.join(ROOT, '..', 'extension', 'sidepanel.js'), 'utf-8');
+
+  test('connection state machine has a dead state with user-visible message', () => {
+    expect(spSrc).toContain("'dead'");
+    expect(spSrc).toContain('MAX_RECONNECT_ATTEMPTS');
+  });
+
+  test('reconnect attempt counter is visible in the UI', () => {
+    // The banner should show attempt count so user knows something is happening
+    expect(spSrc).toContain('reconnectAttempts');
+  });
+});
