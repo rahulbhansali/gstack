@@ -25,10 +25,10 @@ describe('Server auth security', () => {
   // Previously token was removed from /health, but extension needs it since
   // .auth.json in the extension dir breaks read-only .app bundles and codesigning.
   test('/health serves auth token with safety comment', () => {
-    const healthBlock = sliceBetween(SERVER_SRC, "url.pathname === '/health'", "url.pathname === '/refs'");
-    expect(healthBlock).toContain('token: AUTH_TOKEN');
-    // Must have a comment explaining why this is safe
-    expect(healthBlock).toContain('localhost-only');
+    const healthBlock = sliceBetween(SERVER_SRC, "url.pathname === '/health'", "url.pathname === '/connect'");
+    expect(healthBlock).toContain('healthResponse.token = AUTH_TOKEN');
+    // Must have a comment explaining why this is safe — strip when tunneled
+    expect(healthBlock).toContain('tunnelActive');
   });
 
   // Test 2: /refs endpoint requires auth via validateAuth
