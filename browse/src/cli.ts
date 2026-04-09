@@ -11,7 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { safeUnlink, safeKill, isProcessAlive } from './error-handling';
+import { safeUnlink, safeUnlinkQuiet, safeKill, isProcessAlive } from './error-handling';
 import { resolveConfig, ensureStateDir, readVersionHash } from './config';
 
 const config = resolveConfig();
@@ -812,11 +812,11 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
 
     // Clean up Chromium profile locks (can persist after crashes)
     for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
-      safeUnlink(path.join(profileDir, lockFile));
+      safeUnlinkQuiet(path.join(profileDir, lockFile));
     }
 
     // Delete stale state file
-    safeUnlink(config.stateFile);
+    safeUnlinkQuiet(config.stateFile);
 
     console.log('Launching headed Chromium with extension + sidebar agent...');
     try {
@@ -945,9 +945,9 @@ Refs:           After 'snapshot', use @e1, @e2... as selectors:
     // Clean profile locks and state file
     const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
     for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
-      safeUnlink(path.join(profileDir, lockFile));
+      safeUnlinkQuiet(path.join(profileDir, lockFile));
     }
-    safeUnlink(config.stateFile);
+    safeUnlinkQuiet(config.stateFile);
     console.log('Disconnected (server was unresponsive — force cleaned).');
     process.exit(0);
   }

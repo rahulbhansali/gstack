@@ -38,7 +38,7 @@ import { emitActivity, subscribe, getActivityAfter, getActivityHistory, getSubsc
 import { inspectElement, modifyStyle, resetModifications, getModificationHistory, detachSession, type InspectorResult } from './cdp-inspector';
 // Bun.spawn used instead of child_process.spawn (compiled bun binaries
 // fail posix_spawn on all executables including /bin/bash)
-import { safeUnlink, safeKill } from './error-handling';
+import { safeUnlink, safeUnlinkQuiet, safeKill } from './error-handling';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
@@ -1188,11 +1188,11 @@ async function shutdown() {
   // Clean up Chromium profile locks (prevent SingletonLock on next launch)
   const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
   for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
-    safeUnlink(path.join(profileDir, lockFile));
+    safeUnlinkQuiet(path.join(profileDir, lockFile));
   }
 
   // Clean up state file
-  safeUnlink(config.stateFile);
+  safeUnlinkQuiet(config.stateFile);
 
   process.exit(0);
 }
@@ -1204,7 +1204,7 @@ process.on('SIGINT', shutdown);
 // Defense-in-depth — primary cleanup is the CLI's stale-state detection via health check.
 if (process.platform === 'win32') {
   process.on('exit', () => {
-    safeUnlink(config.stateFile);
+    safeUnlinkQuiet(config.stateFile);
   });
 }
 
@@ -1223,9 +1223,9 @@ function emergencyCleanup() {
   // Clean Chromium profile locks
   const profileDir = path.join(process.env.HOME || '/tmp', '.gstack', 'chromium-profile');
   for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
-    safeUnlink(path.join(profileDir, lockFile));
+    safeUnlinkQuiet(path.join(profileDir, lockFile));
   }
-  safeUnlink(config.stateFile);
+  safeUnlinkQuiet(config.stateFile);
 }
 process.on('uncaughtException', (err) => {
   console.error('[browse] FATAL uncaught exception:', err.message);
