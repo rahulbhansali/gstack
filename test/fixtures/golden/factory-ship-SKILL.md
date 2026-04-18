@@ -2395,16 +2395,55 @@ already knows. A good test: would this insight save time in a future session? If
 
 ## Step 12: Version bump (auto-decide)
 
-**Idempotency check:** Before bumping, compare VERSION against the base branch.
+**Idempotency check:** Before bumping, classify the state by comparing `VERSION` against the base branch AND against `package.json`'s `version` field. Four states: FRESH (do bump), ALREADY_BUMPED (skip bump), DRIFT_STALE_PKG (sync pkg only, no re-bump), DRIFT_UNEXPECTED (stop and ask).
 
 ```bash
 BASE_VERSION=$(git show origin/<base>:VERSION 2>/dev/null || echo "0.0.0.0")
 CURRENT_VERSION=$(cat VERSION 2>/dev/null || echo "0.0.0.0")
-echo "BASE: $BASE_VERSION  HEAD: $CURRENT_VERSION"
-if [ "$CURRENT_VERSION" != "$BASE_VERSION" ]; then echo "ALREADY_BUMPED"; fi
+PKG_VERSION=""
+PKG_EXISTS=0
+if [ -f package.json ]; then
+  PKG_EXISTS=1
+  if command -v node >/dev/null 2>&1; then
+    PKG_VERSION=$(node -e 'const p=require("./package.json");process.stdout.write(p.version||"")' 2>/dev/null)
+    PARSE_EXIT=$?
+  elif command -v bun >/dev/null 2>&1; then
+    PKG_VERSION=$(bun -e 'const p=require("./package.json");process.stdout.write(p.version||"")' 2>/dev/null)
+    PARSE_EXIT=$?
+  else
+    echo "ERROR: package.json exists but neither node nor bun is available. Install one and re-run."
+    exit 1
+  fi
+  if [ "$PARSE_EXIT" != "0" ]; then
+    echo "ERROR: package.json is not valid JSON. Fix the file before re-running /ship."
+    exit 1
+  fi
+fi
+echo "BASE: $BASE_VERSION  VERSION: $CURRENT_VERSION  package.json: ${PKG_VERSION:-<none>}"
+
+if [ "$CURRENT_VERSION" = "$BASE_VERSION" ]; then
+  if [ "$PKG_EXISTS" = "1" ] && [ -n "$PKG_VERSION" ] && [ "$PKG_VERSION" != "$CURRENT_VERSION" ]; then
+    echo "STATE: DRIFT_UNEXPECTED"
+    echo "package.json version ($PKG_VERSION) disagrees with VERSION ($CURRENT_VERSION) while VERSION matches base."
+    echo "This looks like a manual edit to package.json bypassing /ship. Reconcile manually, then re-run."
+    exit 1
+  fi
+  echo "STATE: FRESH"
+else
+  if [ "$PKG_EXISTS" = "1" ] && [ -n "$PKG_VERSION" ] && [ "$PKG_VERSION" != "$CURRENT_VERSION" ]; then
+    echo "STATE: DRIFT_STALE_PKG"
+  else
+    echo "STATE: ALREADY_BUMPED"
+  fi
+fi
 ```
 
-If output shows `ALREADY_BUMPED`, VERSION was already bumped on this branch (prior `/ship` run). Skip the bump action (do not modify VERSION), but read the current VERSION value — it is needed for CHANGELOG and PR body. Continue to the next step. Otherwise proceed with the bump.
+Read the `STATE:` line and dispatch:
+
+- **FRESH** → proceed with the bump action below (steps 1–4).
+- **ALREADY_BUMPED** → skip the bump. Reuse `CURRENT_VERSION` for CHANGELOG and PR body. Continue to the next step.
+- **DRIFT_STALE_PKG** → a prior `/ship` bumped `VERSION` but failed to update `package.json`. Run the sync-only repair block below (after step 4). Do NOT re-bump. Reuse `CURRENT_VERSION` for CHANGELOG and PR body.
+- **DRIFT_UNEXPECTED** → `/ship` has halted (exit 1). Resolve manually; /ship cannot tell which file is authoritative.
 
 1. Read the current `VERSION` file (4-digit format: `MAJOR.MINOR.PATCH.MICRO`)
 
@@ -2420,7 +2459,49 @@ If output shows `ALREADY_BUMPED`, VERSION was already bumped on this branch (pri
    - Bumping a digit resets all digits to its right to 0
    - Example: `0.19.1.0` + PATCH → `0.19.2.0`
 
-4. Write the new version to the `VERSION` file.
+4. **Validate** `NEW_VERSION` and write it to **both** `VERSION` and `package.json`. This block runs only when `STATE: FRESH`.
+
+```bash
+if ! printf '%s' "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "ERROR: NEW_VERSION ($NEW_VERSION) does not match MAJOR.MINOR.PATCH.MICRO pattern. Aborting."
+  exit 1
+fi
+echo "$NEW_VERSION" > VERSION
+if [ -f package.json ]; then
+  if command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("fs"),p=require("./package.json");p.version=process.argv[1];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")' "$NEW_VERSION" || {
+      echo "ERROR: failed to update package.json. VERSION was written but package.json is now stale. Fix and re-run — the new idempotency check will detect the drift."
+      exit 1
+    }
+  elif command -v bun >/dev/null 2>&1; then
+    bun -e 'const fs=require("fs"),p=require("./package.json");p.version=process.argv[1];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")' "$NEW_VERSION" || {
+      echo "ERROR: failed to update package.json. VERSION was written but package.json is now stale."
+      exit 1
+    }
+  else
+    echo "ERROR: package.json exists but neither node nor bun is available."
+    exit 1
+  fi
+fi
+```
+
+**DRIFT_STALE_PKG repair path** — runs when idempotency reports `STATE: DRIFT_STALE_PKG`. No re-bump; sync `package.json.version` to the current `VERSION` and continue. Reuse `CURRENT_VERSION` for CHANGELOG and PR body.
+
+```bash
+REPAIR_VERSION=$(cat VERSION)
+if command -v node >/dev/null 2>&1; then
+  node -e 'const fs=require("fs"),p=require("./package.json");p.version=process.argv[1];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")' "$REPAIR_VERSION" || {
+    echo "ERROR: drift repair failed — could not update package.json."
+    exit 1
+  }
+else
+  bun -e 'const fs=require("fs"),p=require("./package.json");p.version=process.argv[1];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")' "$REPAIR_VERSION" || {
+    echo "ERROR: drift repair failed."
+    exit 1
+  }
+fi
+echo "Drift repaired: package.json synced to $REPAIR_VERSION. No version bump performed."
+```
 
 ---
 
