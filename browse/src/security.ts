@@ -107,11 +107,12 @@ export function combineVerdict(signals: LayerSignal[]): SecurityResult {
   const mlHighSignals = [content, deberta, transcript].filter(c => c >= THRESHOLDS.WARN);
   const hasDebertaSignal = deberta > 0;
 
-  // Ensemble rule:
-  //   * 2-of-3 ML classifiers >= WARN → BLOCK when DeBERTa is in the pool
-  //   * 2-of-2 (content + transcript) >= WARN → BLOCK when DeBERTa disabled
-  // In both cases, cross-model agreement is what upgrades from WARN to BLOCK.
-  const requiredForBlock = hasDebertaSignal ? 2 : 2;
+  // Ensemble rule: cross-model agreement is what upgrades from WARN to BLOCK.
+  // Requires >= 2 ML classifiers at WARN regardless of whether DeBERTa is
+  // in the pool (hasDebertaSignal kept in scope for future threshold tuning,
+  // but today the count-based rule is 2 in both configurations).
+  void hasDebertaSignal;
+  const requiredForBlock = 2;
   if (mlHighSignals.length >= requiredForBlock) {
     return {
       verdict: 'block',
@@ -223,22 +224,31 @@ const MAX_LOG_GENERATIONS = 5;
  * ~/.gstack/security/device-salt (0600). Random per-device, prevents rainbow
  * table attacks across devices (Codex tier-2 finding).
  */
+let cachedSalt: string | null = null;
+
 function getDeviceSalt(): string {
+  if (cachedSalt) return cachedSalt;
   try {
-    if (fs.existsSync(SALT_FILE)) return fs.readFileSync(SALT_FILE, 'utf8').trim();
+    if (fs.existsSync(SALT_FILE)) {
+      cachedSalt = fs.readFileSync(SALT_FILE, 'utf8').trim();
+      return cachedSalt;
+    }
   } catch {
     // fall through to generate
   }
   try {
     fs.mkdirSync(SECURITY_DIR, { recursive: true, mode: 0o700 });
   } catch {}
-  const salt = randomBytes(16).toString('hex');
+  cachedSalt = randomBytes(16).toString('hex');
   try {
-    fs.writeFileSync(SALT_FILE, salt, { mode: 0o600 });
+    fs.writeFileSync(SALT_FILE, cachedSalt, { mode: 0o600 });
   } catch {
-    // Non-fatal: we still return salt, just can't persist. Next call regenerates.
+    // Can't persist (read-only fs, disk full). Keep the in-memory salt
+    // for this process so cross-log correlation still works within a
+    // session. Next process gets a new salt, but that's a degraded-mode
+    // acceptable cost.
   }
-  return salt;
+  return cachedSalt;
 }
 
 export function hashPayload(payload: string): string {
