@@ -106,6 +106,55 @@ describe('combineVerdict — ensemble rule', () => {
     expect(r.verdict).toBe('block');
     expect(r.reason).toBe('ensemble_agreement');
   });
+
+  // --- 3-way ensemble (DeBERTa opt-in) ---
+
+  test('3-way: DeBERTa + testsavant at WARN → BLOCK (two ML classifiers agreeing)', () => {
+    const r = combineVerdict([
+      { layer: 'testsavant_content', confidence: 0.7 },
+      { layer: 'deberta_content', confidence: 0.65 },
+      { layer: 'transcript_classifier', confidence: 0.1 },
+    ]);
+    expect(r.verdict).toBe('block');
+    expect(r.reason).toBe('ensemble_agreement');
+  });
+
+  test('3-way: only deberta fires alone → WARN (no cross-confirm)', () => {
+    const r = combineVerdict([
+      { layer: 'testsavant_content', confidence: 0.1 },
+      { layer: 'deberta_content', confidence: 0.9 },
+      { layer: 'transcript_classifier', confidence: 0.1 },
+    ]);
+    expect(r.verdict).toBe('warn');
+    expect(r.reason).toBe('single_layer_high');
+  });
+
+  test('3-way: all three ML layers at WARN → BLOCK with min confidence', () => {
+    const r = combineVerdict([
+      { layer: 'testsavant_content', confidence: 0.7 },
+      { layer: 'deberta_content', confidence: 0.65 },
+      { layer: 'transcript_classifier', confidence: 0.8 },
+    ]);
+    expect(r.verdict).toBe('block');
+    expect(r.reason).toBe('ensemble_agreement');
+    // Confidence reports the MIN of the WARN+ signals (most conservative
+    // estimate of agreed-upon signal strength)
+    expect(r.confidence).toBe(0.65);
+  });
+
+  test('DeBERTa disabled (confidence 0, meta.disabled) does not degrade verdict', () => {
+    // When ensemble is not enabled, scanPageContentDeberta returns
+    // confidence=0 with meta.disabled. combineVerdict must treat this
+    // identically to a safe/absent signal — never let the zero drag
+    // down what testsavant + transcript would have said.
+    const r = combineVerdict([
+      { layer: 'testsavant_content', confidence: 0.7 },
+      { layer: 'deberta_content', confidence: 0, meta: { disabled: true } },
+      { layer: 'transcript_classifier', confidence: 0.7 },
+    ]);
+    expect(r.verdict).toBe('block');
+    expect(r.reason).toBe('ensemble_agreement');
+  });
 });
 
 // ─── Canary generation + injection ───────────────────────────
