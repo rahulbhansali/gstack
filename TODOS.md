@@ -223,41 +223,50 @@ defend the compiled-side ingress.
 
 ### ML Prompt Injection Classifier — v2 Follow-ups
 
-#### Shield icon + canary leak banner UI (P0)
+#### ~~Shield icon + canary leak banner UI (P0)~~ — SHIPPED
 
-**What:** Render the security state in the sidepanel: shield icon (green/yellow/red) in the
-header, and the approved canary leak banner when the agent emits `security_event` (variant A
-mockup at `~/.gstack/projects/garrytan-gstack/designs/prompt-injection-canary-banner-20260419/variant-A.png`).
+Banner landed in commits a9f702a7 (HTML+CSS, variant A mockup) + ffb064af
+(JS wiring + security_event routing + a11y + Escape-to-dismiss). Shield
+icon landed in 59e0635e with 3 states (protected/degraded/inactive),
+custom SVG + mono SEC label per design review Pass 7, hover tooltip with
+per-layer detail.
 
-**Why:** The backend plumbing landed in v1 (`/health` returns security status; agent emits
-security_event). Without the UI, the user never sees when the layer fires. Trust UX is
-load-bearing here.
+Known v1 limitation logged as follow-up: shield only updates at connect —
+see "Shield icon continuous polling" above.
 
-**Context:** Design spec in ceo-plan §"Design Review Additions 2026-04-19". Need to edit
-`extension/sidepanel.html` + `sidepanel.js` + `sidepanel.css`. Respect DESIGN.md tokens
-(amber #F59E0B primary, zinc neutrals, Satoshi/DM Sans/JetBrains Mono).
+#### Shield icon continuous polling (P2)
 
-**Effort:** M (human: ~1d / CC: ~2h)
-**Priority:** P0
-**Depends on:** v1 shipped on `garrytan/prompt-injection-guard`
+**What:** Extend the sidepanel's `/sidebar-chat` polling loop to refresh the
+`security` field so the shield icon reflects classifier warmup completion
+in real-time. Currently the shield only updates at connection bootstrap —
+if ML classifier warmup finishes 30s later (first run downloads 112MB), the
+user has to reload the sidepanel to see the state flip from amber to green.
 
-#### Attack telemetry via gstack-telemetry-log (P1)
+**Why:** First-run UX. The shield is a trust signal — stale data undermines
+it. User thinks "classifier never came up" when it actually warmed 45s ago.
 
-**What:** Extend `~/.claude/skills/gstack/bin/gstack-telemetry-log` with an `attack_attempt`
-event type. New flags: `--event-type attack_attempt --url-domain --payload-hash
---confidence --layer --verdict`. Existing `community`/`anonymous`/`off` tier gating
-applies automatically.
+**Context:** `server.ts`'s `/health` endpoint already returns `security: getStatus()`.
+Two implementation options:
+  1. Add `security` to the `/sidebar-chat` response (piggyback on the 300ms poll)
+  2. Separate 10s poll of `/health` just for shield state
+Option 1 is simpler (no new endpoint hits). Option 2 isolates concerns. Pick
+after real-world usage tells us if 300ms is too fast or 10s is too slow.
 
-**Why:** Local `~/.gstack/security/attempts.jsonl` is write-only. Piggybacking on existing
-telemetry pipe (gstack-telemetry-log → community-pulse edge function → Supabase) means NO
-new SDK, NO new auth, NO new migration. Closes the "attacks in the wild" feedback loop.
+**Effort:** S (human: ~2h / CC: ~20min)
+**Priority:** P2
+**Depends on:** v1 shipped
 
-**Context:** See ceo-plan §"E6 Telemetry Write Path — RESOLVED". Client POSTs the new
-event type; community-pulse edge function stores in a generic `analytics_events.payload jsonb`
-column. Typed `security_attempts` table + dashboard is a separate follow-up.
+#### ~~Attack telemetry via gstack-telemetry-log (P1)~~ — SHIPPED
 
-**Effort:** S (human: ~1d / CC: ~1h)
-**Priority:** P1
+Landed in commits 28ce883c (binary) + f68fa4a9 (security.ts wiring). The
+telemetry binary now accepts `--event-type attack_attempt --url-domain
+--payload-hash --confidence --layer --verdict`. `logAttempt()` spawns the
+binary fire-and-forget. Existing tier gating carries the events.
+
+Downstream follow-up still open: update the `community-pulse` Supabase edge
+function to accept the new event type and store in a typed `security_attempts`
+table. Dashboard read path is a separate TODO ("Cross-user aggregate attack
+dashboard" below).
 
 #### Full BrowseSafe-Bench at gate tier (P2)
 
