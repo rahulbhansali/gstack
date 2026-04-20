@@ -49,6 +49,31 @@ Two independent adversarial reviewers (Claude subagent and Codex/gpt-5.4) conver
 
 Also: attribute-injection fix in `escapeHtml` (escapes `"` and `'` now), `GSTACK_SECURITY_OFF=1` is now a real gate in `loadTestsavant`/`loadDeberta` (not just a doc promise), device salt cached in-process so FS-unwritable environments don't break hash correlation, tool-use registry entries evicted on `tool_result` (memory leak fix), dashboard uses `jq` for brace-balanced JSON parse when available.
 
+### Haiku transcript classifier unbroken (silent bug + gate removal)
+
+The transcript classifier (`checkTranscript` calling `claude -p --model haiku`) was shipping dead. Two bugs:
+
+1. Model alias `haiku-4-5` returned 404 from the CLI. Correct shorthand is `haiku` (resolves to `claude-haiku-4-5-20251001` today, stays on the latest Haiku as models roll).
+2. The 2-second timeout was below the floor. Fresh `claude -p` spawn has ~2-3s CLI cold start + 5-12s inference on ~1KB prompts. At 2s every call timed out. Bumped to 15s.
+
+Compounding the dead classifier: `shouldRunTranscriptCheck` gated Haiku on any other layer firing at `>= LOG_ONLY`. On the ~85% of BrowseSafe-Bench attacks that L4 misses (TestSavantAI recall is ~15% on browser-agent-specific attacks), Haiku never got a chance to vote. We were gating our best signal on our weakest. For tool outputs this gate is now removed — L4 + L4c + Haiku always run in parallel.
+
+Review-on-BLOCK UX (centered alert-heavy banner with suspected text excerpt + per-layer scores + Allow / Block session buttons) lands alongside so false positives are recoverable instead of session-killing.
+
+### Measured: BrowseSafe-Bench (200-case smoke)
+
+Same 200 cases, before and after the fixes above:
+
+| | L4-only (before) | Ensemble with Haiku (after) |
+|---|---|---|
+| Detection rate | 15.3% | **67.3%** |
+| False-positive rate | 11.8% | 44.1% |
+| Runtime | ~90s | ~41 min (Haiku is the long pole) |
+
+**4.4x lift in detection.** FP rate also climbed 3.7x — Haiku is more aggressive and fires on edge cases that TestSavantAI smiles through. The review banner makes those FPs recoverable: user sees the suspected excerpt + layer scores, clicks Allow once, session continues. A P1 follow-up is tuning the Haiku WARN threshold (currently 0.6, probably should be 0.7-0.85) against real-world attempts.jsonl data once gstack users start reporting.
+
+Honest shipping posture: this is meaningfully safer than v1.3.x, not bulletproof. Canary (deterministic), content-security L1-L3 (structural), and the review banner remain the load-bearing defenses when the ML layers miss or over-fire.
+
 ### Env knobs
 
 * `GSTACK_SECURITY_OFF=1` — emergency kill switch (canary still injected, ML skipped)
