@@ -2,9 +2,9 @@
 
 ## [1.4.0.0] - 2026-04-20
 
-## **Turn any markdown file into a PDF you wouldn't be embarrassed to send to a VC.**
+## **Turn any markdown file into a PDF that looks finished.**
 
-The new `/make-pdf` skill takes a `.md` file and produces a publication-quality PDF. 1 inch margins. Helvetica. Page numbers in the footer. Running header with the doc title. Curly quotes, em dashes, ellipsis (…). Optional cover page. Optional clickable table of contents. Optional diagonal DRAFT watermark. Copy any paragraph out of the PDF and paste it into a Google Doc: it pastes as one clean block, not "S a i l i n g" spaced out letter by letter. That last part is the whole point. The current state of the art in "markdown to PDF" tools is a legal document that's been through a scanner three times. This is the one that looks like a Stripe letter.
+The new `/make-pdf` skill takes a `.md` file and produces a publication-quality PDF. 1 inch margins. Helvetica. Page numbers in the footer. Running header with the doc title. Curly quotes, em dashes, ellipsis (…). Optional cover page. Optional clickable table of contents. Optional diagonal DRAFT watermark. Copy any paragraph out of the PDF and paste it into a Google Doc: it pastes as one clean block, not "S a i l i n g" spaced out letter by letter. That last part is the whole game. Most markdown-to-PDF tools produce output that reads like a legal document run through a scanner three times. This one reads like a real essay or a real letter.
 
 ### What you can do now
 
