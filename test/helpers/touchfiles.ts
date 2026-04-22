@@ -207,11 +207,14 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'journey-design-system':  ['*/SKILL.md.tmpl', 'SKILL.md.tmpl', 'scripts/gen-skill-docs.ts'],
   'journey-visual-qa':      ['*/SKILL.md.tmpl', 'SKILL.md.tmpl', 'scripts/gen-skill-docs.ts'],
 
-  // Opus 4.7 behavior evals — depend on overlay + routing + resolver
-  'fanout: overlay ON emits >= parallel calls vs overlay OFF on 3-file investigate task':
+  // Opus 4.7 behavior evals — keys match testName: values in the test file.
+  // Routing sub-tests use template literal `routing-${c.name}` testNames,
+  // which the touchfile completeness scanner skips; they inherit selection
+  // from the file-level touchfile entry via GLOBAL_TOUCHFILES.
+  'fanout-arm-overlay-on':
     ['model-overlays/claude.md', 'model-overlays/opus-4-7.md', 'scripts/models.ts', 'scripts/resolvers/model-overlay.ts'],
-  'routing precision: positives route, negatives do not':
-    ['SKILL.md.tmpl', 'scripts/resolvers/preamble/generate-routing-injection.ts', 'model-overlays/opus-4-7.md'],
+  'fanout-arm-overlay-off':
+    ['model-overlays/claude.md', 'model-overlays/opus-4-7.md', 'scripts/models.ts', 'scripts/resolvers/model-overlay.ts'],
 };
 
 /**
@@ -380,8 +383,8 @@ export const E2E_TIERS: Record<string, 'gate' | 'periodic'> = {
   'journey-visual-qa': 'periodic',
 
   // Opus 4.7 overlay evals — periodic (non-deterministic LLM behavior + Opus cost)
-  'fanout: overlay ON emits >= parallel calls vs overlay OFF on 3-file investigate task': 'periodic',
-  'routing precision: positives route, negatives do not': 'periodic',
+  'fanout-arm-overlay-on': 'periodic',
+  'fanout-arm-overlay-off': 'periodic',
 };
 
 /**
