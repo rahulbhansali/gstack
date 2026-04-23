@@ -1,5 +1,25 @@
 # TODOS
 
+## Testing
+
+### `security-bench-haiku-responses.json` is 27MB, violates the 2MB tracked-file gate
+
+**What:** `browse/test/fixtures/security-bench-haiku-responses.json` landed on main at v1.6.4.0 (PR #1135) at 27MB. The `no compiled binaries in git > git tracks no files larger than 2MB` gate in `test/skill-validation.test.ts:1623` fails on main and on every feature branch that merges main afterward.
+
+**Why:** The fixture is a legitimate CI replay corpus (real Haiku responses from the 500-case BrowseSafe-Bench) used to verify the ensemble classifier deterministically. But 13x over the 2MB limit means it will keep failing the validation test for every future ship.
+
+**Pros:** Removes a pre-existing failure that wastes a triage slot in every /ship run.
+
+**Cons:** Moving to git-lfs adds a dependency. Splitting into chunks risks breaking the bench test. External hosting adds a CI fetch step.
+
+**Context:** Noticed during workspace-aware-ship /ship on 2026-04-23 when the post-merge test suite flagged this single failure. Introduced on main in PR #1135 (`v1.6.4.0: cut Haiku classifier FP from 44% to 23%`), commit d75402bb. Two reasonable paths: (a) split into multiple ≤2MB chunks and load them in the bench test, (b) move to git-lfs.
+
+**Effort:** M (human: ~2-3h / CC: ~20 min)
+**Priority:** P1 (not blocking ship, but every future /ship triages the same failure)
+**Depends on:** nothing
+
+---
+
 ## Context skills
 
 ### `/context-save --lane` + `/context-restore --lane` for parallel workstreams
