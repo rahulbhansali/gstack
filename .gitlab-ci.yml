@@ -35,6 +35,7 @@ version-gate:
         --bump "$LEVEL" \
         --current-version "$BASE_VERSION" \
         --workspace-root null \
+        --exclude-pr "$CI_MERGE_REQUEST_IID" \
         > next.json
       RC=$?
       if [ "$RC" != "0" ] || [ ! -s next.json ]; then

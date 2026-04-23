@@ -58,6 +58,7 @@ jobs:
             --bump "${{ steps.bump.outputs.level }}" \
             --current-version "${{ steps.versions.outputs.base_version }}" \
             --workspace-root null \
+            --exclude-pr "${{ github.event.pull_request.number }}" \
             > next.json 2> next.err
           RC=$?
           if [ "$RC" != "0" ] || [ ! -s next.json ]; then
