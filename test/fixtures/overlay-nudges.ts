@@ -253,6 +253,9 @@ export const OVERLAY_FIXTURES: OverlayFixture[] = [
     trials: 10,
     concurrency: 3,
     direction: 'lower_is_better',
+    // 5 files + summary = needs more than default 5 turns. SDK throws
+    // instead of returning a result when it hits the cap.
+    maxTurns: 15,
     setupWorkspace: (dir) => {
       fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
       fs.writeFileSync(path.join(dir, 'src', 'index.ts'), "export const x = 1;\n");
