@@ -1,5 +1,82 @@
 # Changelog
 
+## [1.6.3.0] - 2026-04-23
+
+## **Codex finally explains what it's asking about. No more "ELI10 please" the 10th time in a row.**
+
+A follow-up to v1.6.2.0. After shipping the Claude-verified fix, user reported Codex (GPT-5.4) was failing the same pattern 10/10 times — skipping the ELI10 explanation and the RECOMMENDATION line on AskUserQuestion calls, forcing manual "ELI10 and don't forget to recommend" re-prompts every time. Root cause: the `gpt.md` model overlay's "No preamble / Prefer doing over listing" rule was training Codex to skip the exact prose the user needs for decision-making.
+
+### The numbers that matter
+
+Source: new `test/codex-e2e-plan-format.test.ts`, four cases driven via `codex exec` on the installed gstack Codex host. Periodic tier (GPT-class non-determinism).
+
+| Case | Type | Pre-fix (measured, 10/10 times) | Post-fix (v1.6.3.0) |
+|---|---|---|---|
+| plan-ceo-review mode selection | kind | No ELI10 paragraph, no RECOMMENDATION line | ✓ ELI10 + RECOMMENDATION + "options differ in kind" note |
+| plan-ceo-review approach menu | coverage | No ELI10 paragraph, bare options list | ✓ ELI10 + RECOMMENDATION + `Completeness: 5/7/10` |
+| plan-eng-review coverage issue | coverage | Bare options list | ✓ ELI10 + RECOMMENDATION + Completeness |
+| plan-eng-review architectural choice | kind | Fabricated Completeness filler on kind question | ✓ ELI10 + RECOMMENDATION + "options differ in kind" note |
+
+All 4 Codex cases pass ELI10 length floor (>400 chars of prose per question). 517s for the full eval; Codex doesn't bill per call the way Anthropic does.
+
+### Itemized changes
+
+#### Fixed
+
+- Codex no longer skips the Simplify/ELI10 paragraph on AskUserQuestion calls. The `gpt.md` overlay now carves out AskUserQuestion content from the "No preamble" rule explicitly: you still skip filler on direct answers, but every AskUserQuestion gets the full Re-ground + ELI10 + RECOMMENDATION + Options format.
+- Codex no longer collapses the RECOMMENDATION into the options list. It lands on its own line, every time, regardless of question type.
+
+#### Changed
+
+- `scripts/resolvers/preamble/generate-ask-user-format.ts` — step 2 renamed to "Simplify (ELI10, ALWAYS)" with explicit "not optional verbosity, not preamble" framing. Step 3 "Recommend (ALWAYS)" hardened: "Never omit, never collapse into the options list." The tightening applies to all hosts, but Codex felt it most.
+- `model-overlays/gpt.md` — adds a new "AskUserQuestion is NOT preamble" section that instructs the model to back up and emit the full format if it ever finds itself about to skip the ELI10 paragraph or the RECOMMENDATION line.
+
+#### For contributors
+
+- `test/codex-e2e-plan-format.test.ts` — four periodic-tier Codex eval cases mirroring the Claude version. Uses `codex exec` via the existing `test/helpers/codex-session-runner.ts` harness with `sandbox: 'workspace-write'` so the capture file lands inside the tempdir. Assertions: RECOMMENDATION regex, coverage-vs-kind Completeness split, ELI10 length floor (400+ chars).
+- All T2 skills regenerated across all hosts (claude, codex, factory, gbrain, gpt-5.4, hermes, kiro, opencode, openclaw, slate, cursor). Golden fixtures refreshed. `test/gen-skill-docs.test.ts` ELI10 assertion updated to match the new "Simplify (ELI10" heading.
+
+## [1.6.2.0] - 2026-04-22
+
+## **Plan reviews give you the recommendation again. And we finally admitted a 10/10 score on a mode pick means nothing.**
+
+A user on Opus 4.7 reported `/plan-ceo-review` and `/plan-eng-review` stopped showing the `RECOMMENDATION: Choose X` line and the per-option `Completeness: N/10` score that used to make decisions quick. The fix ships both signals back, but with a sharper distinction: coverage-differentiated options get real scores (10 = all edges, 7 = happy path, 3 = shortcut), and kind-differentiated options (mode selection, A-vs-B architecture calls, cherry-pick Add/Defer/Skip) get the RECOMMENDATION plus an explicit `Note: options differ in kind, not coverage — no completeness score.` line instead of fabricated 10/10 filler.
+
+### The numbers that matter
+
+Source: `test/skill-e2e-plan-format.test.ts`, four cases pinned to `claude-opus-4-7`, ~$2 per full run. Periodic tier (non-deterministic Opus behavior gets weekly cron, not per-PR gate).
+
+| Question type | Before (v1.6.1.0) | After (v1.6.2.0) |
+|---|---|---|
+| Mode selection (kind-differentiated) | `Completeness: 10/10` fabricated on all 4 modes | RECOMMENDATION + "options differ in kind" note |
+| Approach menu (coverage-differentiated) | `**RECOMMENDATION:**` markdown-bolded but regex missed it | RECOMMENDATION + `Completeness: 5/7/10` per option |
+| Per-issue coverage decision | Present, working | Present, working (unchanged) |
+| Per-issue architectural choice (kind-differentiated) | `Completeness: 9/9/5` fabricated on kind question | RECOMMENDATION + "options differ in kind" note |
+
+| Eval pass | Result | Cost |
+|---|---|---|
+| Phase 1 baseline (pre-fix) | 1/4 assertions pass (evidence of regression) | $2.19 |
+| Phase 3 post-fix | 4/4 assertions pass | $1.84 |
+| Phase 3b neighbor regression (`skill-e2e-plan.test.ts`) | 12/12 pass, no drift | $5.19 |
+
+### Itemized changes
+
+#### Fixed
+
+- `RECOMMENDATION: Choose X` now appears consistently on every AskUserQuestion in `/plan-ceo-review` and `/plan-eng-review` regardless of question type.
+- `Completeness: N/10` is only emitted on coverage-differentiated options. Kind-differentiated questions (mode picks, architectural choices between different systems, cherry-pick A/B/C) emit a one-line note explaining why the score doesn't apply, instead of fabricating 10/10 filler.
+
+#### Changed
+
+- The `AskUserQuestion Format` section in the T2 preamble splits the old run-on paragraph into two ALWAYS-framed rules: step 3 "Recommend (ALWAYS)" and step 4 "Score completeness (when meaningful)". This affects every T2 skill (~15 files regenerated).
+- The `Completeness Principle — Boil the Lake` preamble section now states the coverage-vs-kind distinction explicitly, matching step 4. Without this edit the two preamble locations would disagree — which is how the regression started.
+- Section 0C-bis (approach menu) and Section 0F (mode selection) in `plan-ceo-review/SKILL.md.tmpl` now carry short anchor lines that remind the model which question type applies. `plan-eng-review/SKILL.md.tmpl` gets an equivalent anchor inside the CRITICAL RULE section for per-issue AskUserQuestion decisions.
+
+#### For contributors
+
+- New test file `test/skill-e2e-plan-format.test.ts` captures verbatim AskUserQuestion output from the two plan skills and asserts the coverage-vs-kind format. Instructs the agent to write would-be AskUserQuestion text to `$OUT_FILE` rather than calling an MCP tool (since MCP isn't wired inside `claude -p`).
+- Classified `periodic` tier because behavior depends on Opus 4.7 non-determinism — `gate` tier would flake and block merges.
+- Golden fixtures (`test/fixtures/golden/claude-ship-SKILL.md`, `codex-ship-SKILL.md`, `factory-ship-SKILL.md`) refreshed to reflect the new format rule.
 
 ## [1.6.1.0] - 2026-04-22
 
