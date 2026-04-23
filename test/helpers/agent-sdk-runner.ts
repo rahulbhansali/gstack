@@ -209,6 +209,19 @@ export function isRateLimitEvent(msg: SDKMessage): boolean {
   return info?.status === 'rejected';
 }
 
+/**
+ * True if `err` is the SDK's "max turns reached" throw. Some SDK versions
+ * raise this as an exception from the generator instead of emitting a
+ * result message with subtype='error_max_turns'. We treat it as terminal-
+ * but-recoverable: record what we collected and continue, rather than
+ * failing the whole run.
+ */
+export function isMaxTurnsError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const msg = (err as { message?: string }).message ?? '';
+  return /reached maximum number of turns|max.?turns/i.test(msg);
+}
+
 // ---------------------------------------------------------------------------
 // Version resolution (cached)
 // ---------------------------------------------------------------------------
@@ -259,6 +272,20 @@ export async function runAgentSdkTest(
   while (attempt <= maxRetries) {
     await sem.acquire();
     const startMs = Date.now();
+
+    // Hoisted so the max-turns catch branch can synthesize a result from
+    // whatever we captured before the SDK threw.
+    const events: SDKMessage[] = [];
+    const assistantTurns: SDKAssistantMessage[] = [];
+    const toolCalls: Array<{ tool: string; input: unknown; output: string }> = [];
+    const assistantTextParts: string[] = [];
+    let firstResponseMs = 0;
+    let lastEventMs = startMs;
+    let maxInterTurnMs = 0;
+    let systemInitVersion = 'unknown';
+    let rateLimited: unknown = null;
+    let terminalResult: SDKResultMessage | null = null;
+
     try {
       const sdkOpts: Options = {
         model,
@@ -279,17 +306,6 @@ export async function runAgentSdkTest(
       if (typeof opts.systemPrompt === 'object' || opts.systemPrompt !== '') {
         sdkOpts.systemPrompt = opts.systemPrompt;
       }
-
-      const events: SDKMessage[] = [];
-      const assistantTurns: SDKAssistantMessage[] = [];
-      const toolCalls: Array<{ tool: string; input: unknown; output: string }> = [];
-      const assistantTextParts: string[] = [];
-      let firstResponseMs = 0;
-      let lastEventMs = startMs;
-      let maxInterTurnMs = 0;
-      let systemInitVersion = 'unknown';
-      let rateLimited: unknown = null;
-      let terminalResult: SDKResultMessage | null = null;
 
       const q = queryImpl({
         prompt: opts.userPrompt,
@@ -382,6 +398,34 @@ export async function runAgentSdkTest(
       };
     } catch (err) {
       lastErr = err;
+
+      // "Max turns reached" is the SDK's way of saying "this session ran
+      // out of turns." It's thrown from the generator instead of emitted
+      // as a result message. Treat as a successful-but-capped trial: the
+      // assistant turns we collected are real and carry a metric. Record
+      // them with exitReason='error_max_turns' rather than failing the
+      // whole run.
+      if (isMaxTurnsError(err)) {
+        const durationMs = Date.now() - startMs;
+        return {
+          events,
+          assistantTurns,
+          toolCalls,
+          output: assistantTextParts.join('\n'),
+          exitReason: 'error_max_turns',
+          turnsUsed: assistantTurns.length,
+          durationMs,
+          firstResponseMs,
+          maxInterTurnMs,
+          costUsd: 0, // unknown from thrown-error path
+          model,
+          sdkVersion: resolveSdkVersion(),
+          sdkClaudeCodeVersion: systemInitVersion,
+          resolvedBinaryPath: opts.pathToClaudeCodeExecutable ?? 'sdk-default',
+          browseErrors: [],
+        };
+      }
+
       const isRetryable = isRateLimitThrown(err);
       if (!isRetryable || attempt >= maxRetries) {
         if (isRetryable) {
