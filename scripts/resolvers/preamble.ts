@@ -87,12 +87,16 @@ export function generatePreamble(ctx: TemplateContext): string {
     generateVendoringDeprecation(ctx),
     generateSpawnedSessionCheck(),
     generateBrainHealthInstruction(ctx),
+    // AskUserQuestion Format renders BEFORE the model overlay so the pacing rule
+    // is the ambient default; the overlay's behavioral nudges land as subordinate
+    // patches. Opus 4.7 reads top-to-bottom and absorbs the first pacing directive
+    // it hits; reversing this order regresses plan-review cadence (v1.6.4.0 bug).
+    ...(tier >= 2 ? [generateAskUserFormat(ctx)] : []),
     generateBrainSyncBlock(ctx),
     generateModelOverlay(ctx),
     generateVoiceDirective(tier),
     ...(tier >= 2 ? [
       generateContextRecovery(ctx),
-      generateAskUserFormat(ctx),
       generateWritingStyle(ctx),
       generateCompletenessSection(),
       generateConfusionProtocol(),

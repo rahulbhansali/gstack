@@ -95,6 +95,63 @@ Three dollars per run.
   `test/fixtures/overlay-nudges.ts`. Total incremental effort: ~15 minutes
   per fixture.
 
+## [1.10.0.0] - 2026-04-23
+
+## **Plan reviews walk you through each issue again, and every question is now a real decision brief.**
+
+v1.6.4.0 broke something nobody wrote down. Plan reviews on Opus 4.7 silently stopped asking questions one at a time. They turned into a report: here are 6 findings, end of turn. The interactive dialogue that made `/plan-ceo-review`, `/plan-eng-review`, and the rest useful quietly evaporated. v1.10.0.0 restores that, and bundles a format upgrade so every `AskUserQuestion` now renders as a numbered decision brief with ELI10, stakes, recommendation, per-option pros / cons (✅ / ❌), and a closing "Net:" line that frames the trade-off in one sentence.
+
+### What changes for you
+
+Run `/plan-ceo-review` or `/plan-eng-review` on a plan with 3 findings. You get 3 separate AskUserQuestion prompts, one per finding, with the full Pros / Cons shape. Pick the option in 5 seconds, or expand the pros / cons if you want to think about it. Every review finding becomes a decision you actually made, not a bullet point you skimmed. The reference shape matches the D2 memory-design question Garry hand-crafted for his own use, now baked into every tier-2 skill via the preamble resolver, so `/ship`, `/office-hours`, `/investigate`, and the rest inherit it for free.
+
+### The numbers that matter
+
+Measured across the v1.10.0.0 fix. Verify any claim with `git log 1.9.0.0..1.10.0.0 --oneline` and `bun test` against the pinned commit SHA.
+
+| Metric | v1.6.4.0 | v1.10.0.0 | Δ |
+|---|---|---|---|
+| `AskUserQuestion` renders above model overlay in SKILL.md | no | **yes** | ordering inverted |
+| Escape-hatch sites hardened across plan-review templates | 0 | **16** | +16 |
+| Gate-tier unit tests pinning the format contract | 0 | **30** | +30 (runs in 16ms, $0) |
+| Periodic evals defending against escape-hatch abuse | 0 | **4** | +4 (2 positive, 2 negative-case) |
+| Cross-model review findings incorporated before landing | N/A | **5 of 8** | Codex caught real bugs CEO+Eng missed |
+
+Two of the five Codex findings were load-bearing. (1) The overlay reorder theory wasn't enough on its own. The `(recommended)` label on a neutral-posture question had to stay, because `question-tuning.ts:29` reads it to power AUTO_DECIDE. Omitting it would have silently broken auto-decide on every cherry-pick prompt. (2) The "31 sites global replace" in the original plan was factually wrong. Actual count, verified with `rg`, is 16 sites across 4 templates, and eng/design/devex templates used different phrasing than CEO. Without the audit, the fix would have shipped half-applied.
+
+### What this means for anyone running plan reviews on Opus 4.7
+
+Upgrade and re-run your next plan review. You should see D-numbered prompts (D1, D2, D3...) with ELI10 paragraphs, stakes lines, and ✅ / ❌ bullet blocks per option. If you don't, check that `bun run gen:skill-docs` regenerated cleanly after the upgrade, and verify the `Pros / cons:` header renders in `plan-ceo-review/SKILL.md`. Complete plan reviews that used to take 20 minutes and produced a report now take 10 minutes and produce a row of decisions.
+
+### Itemized changes
+
+#### Added
+
+- New Pros / Cons decision-brief format for every `AskUserQuestion` across all tier-2+ skills. Rendering: `D<N>` header, ELI10, "Stakes if we pick wrong:", Recommendation, per-option `✅ / ❌` bullets with minimum 2 pros + 1 con, closing `Net:` synthesis line. Lands in `scripts/resolvers/preamble/generate-ask-user-format.ts` so every skill inherits it.
+- Hard-stop escape for destructive one-way choices: single bullet `✅ No cons — this is a hard-stop choice`.
+- Neutral-posture handling for SELECTIVE EXPANSION cherry-picks and taste calls: `Recommendation: <default> — this is a taste call, no strong preference either way` with `(recommended)` label preserved on the default to keep AUTO_DECIDE working.
+- Three gate-tier unit tests (`test/preamble-compose.test.ts`, `test/resolver-ask-user-format.test.ts`, `test/model-overlay-opus-4-7.test.ts`) that pin the composition order, format contract, and overlay text. Run in <100ms on every `bun test`.
+- Four periodic-tier Pros/Cons eval cases in `test/skill-e2e-plan-prosons.test.ts` including two negative-case assertions that catch escape-hatch abuse before it drifts.
+- Touchfiles entries (`test/helpers/touchfiles.ts`) for all new eval cases plus expanded-coverage stubs for 7 additional skills.
+
+#### Fixed
+
+- Plan-review cadence regression on Opus 4.7. `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, and `/plan-devex-review` now actually pause after each finding and call `AskUserQuestion` as a tool_use instead of batching everything into one summary report. Root cause: `generateModelOverlay` rendered above `generateAskUserFormat` in `scripts/resolvers/preamble.ts`, so the overlay's "Batch your questions" directive registered as the ambient default before the pacing rule. Fixed by reordering the section array and rewriting the overlay directive as "Pace questions to the skill".
+- Escape-hatch collapse: "If no issues or fix is obvious, state what you'll do and move on, don't waste a question" at 16 sites across 4 templates let Opus 4.7's literal interpreter classify every finding as self-dismissable. Tightened per-template: zero findings gets "No issues, moving on"; findings require AskUserQuestion as a tool_use.
+
+#### Changed
+
+- `test/skill-e2e-plan-format.test.ts`: extended with v1.10.0.0 format token regexes (D-number, ELI10, Stakes, Pros/cons, Net). Existing RECOMMENDATION check loosened to accept mixed-case "Recommendation:".
+- `test/skill-validation.test.ts`: format assertions updated from "RECOMMENDATION: Choose" to the new Pros/Cons token set.
+- Golden fixtures regenerated: `test/fixtures/golden/claude-ship-SKILL.md`, `codex-ship-SKILL.md`, `factory-ship-SKILL.md`.
+
+#### For contributors
+
+- Outside-voice Codex review (`codex exec` with `model_reasoning_effort="high"`) caught two factual bugs in the original plan: the "31 sites" count (actually 16) and the AUTO_DECIDE contract break on neutral-posture questions. 5 of 8 Codex findings incorporated, 1 rejected (kept defense in depth on the composition reorder), 1 declined (HOLD SCOPE mode lock).
+- Follow-up: true multi-turn cadence eval (3 findings produce 3 distinct AskUserQuestion invocations across turns) requires new harness support for multi-capture. Filed in NOT-in-scope. Current single-capture eval covers format + escape-hatch abuse but not cadence itself.
+- Follow-up: expanded-coverage eval cases for `/ship`, `/office-hours`, `/investigate`, `/qa`, `/review`, `/design-review`, `/document-release`. Touchfiles entries exist; test blocks will land per-skill in follow-up PRs.
+- D-numbering is a model-level instruction, not a runtime counter. `TemplateContext` has no state for it. Drift over long sessions is expected; a registry (deferred to TODOs) is the long-term fix.
+
 ## [1.9.0.0] - 2026-04-23
 
 ## **Your gstack memory now travels with you. Cross-machine brain via a private git repo + optional GBrain indexing, no daemon, no credential leaks.**

@@ -6,12 +6,13 @@ extended thinking for genuinely hard subproblems: architectural tradeoffs, subtl
 security implications, design decisions with competing constraints. Over-thinking
 simple steps wastes tokens and time.
 
-**Batch your questions.** If you need to clarify multiple things before proceeding,
-ask all of them in a single AskUserQuestion turn. Do not drip-feed one question per
-turn. Three questions in one message beats three back-and-forth exchanges. Exception:
-skill workflows that explicitly require one-question-at-a-time pacing (e.g., plan
-review skills with "STOP. AskUserQuestion once per issue. Do NOT batch.") override this
-nudge. The skill wins on pacing, always.
+**Pace questions to the skill.** If the current skill's text contains
+`STOP. AskUserQuestion` anywhere, pace one question per turn — emit the question as
+a tool_use, stop, wait for the user's response, then continue. Do not batch. A
+finding with an "obvious fix" is still a finding and still needs user approval
+before it lands in the plan. Only batch clarifying questions upfront when (a) the
+skill has no `STOP. AskUserQuestion` directive AND (b) you need multiple unrelated
+clarifications before you can begin. When in doubt, ask one question per turn.
 
 **Literal interpretation awareness.** Opus 4.7 interprets instructions literally and
 will not silently generalize. When the user says "fix the tests," fix all failing tests
